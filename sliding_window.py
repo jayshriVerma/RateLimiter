@@ -1,44 +1,49 @@
+import threading
 import time
 
 
 class SlidingWindowRateLimiter:
-    def __init__(self, limit: int, window_size: int):
+    def __init__(self, limit, window_size):
         self.limit = limit
         self.window_size = window_size
+
         self.current_window_count = 0
         self.previous_window_count = 0
         self.window_start = time.time()
 
-    def allow_request(self) -> bool:
-        now = time.time()
-        elapsed = now - self.window_start
+        self.lock = threading.Lock()
 
-        # Move window if needed
-        if elapsed >= self.window_size:
-            windows_passed = int(elapsed // self.window_size)
+    def allow_request(self):
+        with self.lock:
+            now = time.time()
+            elapsed = now - self.window_start
 
-            if windows_passed == 1:
-                self.previous_window_count = self.current_window_count
-            else:
-                self.previous_window_count = 0
+            if elapsed >= self.window_size:
+                windows_passed = int(elapsed // self.window_size)
 
-            self.current_window_count = 0
-            self.window_start = now
-            elapsed = 0
+                if windows_passed == 1:
+                    self.previous_window_count = self.current_window_count
+                else:
+                    self.previous_window_count = 0
 
-        remaining_time = self.window_size - elapsed
+                self.current_window_count = 0
+                self.window_start = now
+                elapsed = 0
 
-        weighted_previous = (
-            self.previous_window_count * (remaining_time / self.window_size)
-        )
+            remaining_time = self.window_size - elapsed
 
-        effective_count = weighted_previous + self.current_window_count
+            weighted_previous = (
+                self.previous_window_count * (remaining_time / self.window_size)
+            )
 
-        if effective_count >= self.limit:
-            return False
+            effective_count = weighted_previous + self.current_window_count
 
-        self.current_window_count += 1
-        return True
+            if effective_count >= self.limit:
+                return False
+
+            self.current_window_count += 1
+            return True
+
     
 if __name__ == "__main__":
     limiter = SlidingWindowRateLimiter(limit=5, window_size=10)
